@@ -97,19 +97,27 @@ comandos disponiveis:
         elif command == "/quit":
             return quit()
         elif command == "/list":
-            return "List of connected clients: [Client1, Client2, Client3]"
+            if not connected_clients:
+                return "No clients connected."
+            else:
+                client_list = "\n".join(
+                    [f"{i}: {addr}" for i, (_, addr) in enumerate(connected_clients)])
+                return f"Connected clients:\n{client_list}"
         elif command.startswith("/send "):
             parts = command.split(" ", 2)
             if len(parts) == 3:
                 client_id = parts[1]
                 message = parts[2]
-                # Here you would implement logic to send the message to the specified client
-                return f"Message sent to {client_id}: {message}"
-            else:
-                # Broadcast message to all clients
-                message = command[6:]  # Remove "/send " from the beginning
-                # Here you would implement logic to send the message to all clients
+                if send_message_to_client(client_id, message):
+                    return f"Message sent to client {client_id}: {message}"
+                else:
+                    return f"Invalid client ID: {client_id}"
+            elif len(parts) == 2:
+                message = parts[1]
+                send_message_to_all_clients(message)
                 return f"Message sent to all clients: {message}"
+            else:
+                return "Invalid /send command. Use /send <client_id> <message> or /send <message>"
         else:
             return "Unknown command. Type /help for a list of available commands."
 
@@ -142,13 +150,25 @@ comandos disponiveis:
         # Close the client socket
         client_socket.close()
 
-    def send_message_to_client(client_socket, client_id, message):
-        # Placeholder function to send a message to a specific client
-        client_socket.send
+    def send_message_to_client(client_id, message):
+        try:
+            idx = int(client_id)
+            if 0 <= idx < len(connected_clients):
+                client_socket, _ = connected_clients[idx]
+                client_socket.sendall(message.encode())
+                return True
+            else:
+                return False
+        except (ValueError, OSError):
+            return False
 
     def send_message_to_all_clients(message):
-        # Placeholder function to send a message to all connected clients
-        pass
+        for client_socket, _ in connected_clients:
+            try:
+                client_socket.sendall(message.encode())
+            except OSError:
+                pass  # Ignore errors for disconnected clients
+        return True
 
     def quit():
         """Close all client connections and shut down the server."""
