@@ -10,7 +10,7 @@ def chat_servidor_p2p():
     """Servidor para chat P2P - Cliente 1"""
     servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     servidor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    servidor.bind(('0.0.0.0', PORT))
+    servidor.bind(('localhost', PORT))
     servidor.listen(1)
 
     print("[SERVIDOR] Aguardando conexão...")
@@ -24,7 +24,7 @@ def chat_servidor_p2p():
                 msg = conexao.recv(1024).decode('UTF-8')
                 if msg:
                     print(f"\n{msg}")
-                    print("Você: ", end='', flush=True)
+                    print("Server: ", end='', flush=True)
             except:
                 break
 
@@ -49,7 +49,7 @@ def chat_cliente_p2p():
     cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     try:
-        cliente.connect((IP_CLIENTE, PORT))
+        cliente.connect(("localhost", PORT))
         print("[CONECTADO] Conectado ao servidor")
 
         # Thread para receber mensagens
@@ -59,7 +59,7 @@ def chat_cliente_p2p():
                     msg = cliente.recv(1024).decode('UTF-8')
                     if msg:
                         print(f"\n{msg}")
-                        print("Você: ", end='', flush=True)
+                        print("Cliente: ", end='', flush=True)
                 except:
                     break
 
