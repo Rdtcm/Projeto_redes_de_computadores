@@ -1,6 +1,6 @@
 import socket #importa modulo socket
 
-TCP_IP = '192.168.0.3' # endereço IP do servidor 
+TCP_IP = '127.0.0.1' # endereço IP do servidor 
 TCP_PORTA = 10352      # porta disponibilizada pelo servidor
 TAMANHO_BUFFER = 1024
 
