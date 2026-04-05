@@ -3,7 +3,7 @@ import threading
 
 
 PORT = 10352
-IP_CLIENTE = "192.168.15.100"
+IP_CLIENTE = "177.197.98.100"
 
 
 def chat_servidor_p2p():
