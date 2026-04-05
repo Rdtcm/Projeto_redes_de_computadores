@@ -1,115 +1,114 @@
 import socket
 import threading
-import sys
 
-HOST_IP = '127.0.0.1'
+HOST = '0.0.0.0'
 PORT = 10352
 
-# Lista de tuplas: [(socket, address), ...]
-connected_clients = []
+clients = []
+lock = threading.Lock()
 
 def banner():
-    text = """
-    ===========================================
-    |       COMMAND & CONTROL SERVER          |
-    |          Alunos: Derick e Ryan          |
-    ===========================================
-    Comandos (digite no CLIENTE): 
-    - /help: exibe esta lista
-    - /list: lista IDs dos clientes no servidor
-    - /send <id> <msg>: mensagem para um ID
-    - /send <msg>: mensagem para TODOS
-    - /quit: encerra sua conexão
-    ===========================================
-    """
-    print(text)
-    return text
+    return """
+===========================================
+|        COMMAND & CONTROL SERVER        |
+===========================================
+Comandos:
+- /list                     -> lista clientes
+- /send <id> <cmd>         -> envia comando
+- /all <cmd>               -> envia para todos
+- /quit                    -> sair
+===========================================
+"""
 
-def handle_client(client_socket, client_address):
-    welcome = banner()
-    client_socket.sendall(welcome.encode())
+def list_clients():
+    with lock:
+        if not clients:
+            return "Nenhum cliente conectado."
+        return "\n".join([f"ID {i} - {addr}" for i, (sock, addr) in enumerate(clients)])
 
-    while True:
-        try:
-            data = client_socket.recv(1024).decode('UTF-8').strip()
-            if not data or data.lower() == '/quit':
+def broadcast(command, sender=None):
+    with lock:
+        for sock, addr in clients:
+            if sock != sender:
+                try:
+                    sock.sendall(command.encode())
+                except:
+                    pass
+
+def send_to_client(client_id, command):
+    with lock:
+        if 0 <= client_id < len(clients):
+            sock = clients[client_id][0]
+            sock.sendall(command.encode())
+            return f"Comando enviado para ID {client_id}"
+        else:
+            return "ID inválido"
+
+def handle_client(sock, addr):
+    print(f"[+] Cliente conectado: {addr}")
+    
+    try:
+        sock.send(banner().encode())
+
+        while True:
+            data = sock.recv(4096)
+            if not data:
                 break
-            
-            print(f"[*] Comando recebido de {client_address}: {data}")
 
-            # --- LÓGICA DOS COMANDOS ---
-            
-            if data == "/help":
-                response = "Comandos: /help, /list, /send <id> <msg>, /send <msg>, /quit"
-            
-            elif data == "/list":
-                if not connected_clients:
-                    response = "Nenhum cliente conectado."
-                else:
-                    # Cria uma lista de strings: "ID 0: ('127.0.0.1', 1234)"
-                    lista = "\n".join([f"ID {i}: {c[1]}" for i, c in enumerate(connected_clients)])
-                    response = f"Clientes ativos:\n{lista}"
+            print(f"[RESPOSTA {addr}]:\n{data.decode()}")
 
-            elif data.startswith("/send"):
-                parts = data.split(" ", 2)
-                
-                # Caso 1: /send <id> <mensagem>
-                if len(parts) == 3 and parts[1].isdigit():
-                    target_id = int(parts[1])
-                    msg_to_send = parts[2]
-                    if 0 <= target_id < len(connected_clients):
-                        target_sock = connected_clients[target_id][0]
-                        target_sock.sendall(f"\n[ORDEM PRIVADA]: {msg_to_send}\n".encode())
-                        response = f"Mensagem enviada para o ID {target_id}."
-                    else:
-                        response = "Erro: ID de cliente inválido."
-                
-                # Caso 2: /send <mensagem> (Broadcast)
-                elif len(parts) >= 2:
-                    msg_to_send = data.replace("/send ", "", 1)
-                    for sock, addr in connected_clients:
-                        if sock != client_socket: # Não manda para si mesmo
-                            sock.sendall(f"\n[COMANDO GLOBAL]: {msg_to_send}\n".encode())
-                    response = "Comando global enviado para todos."
-                else:
-                    response = "Uso: /send <msg> ou /send <id> <msg>"
+    except Exception as e:
+        print(f"[ERRO] {addr}: {e}")
+
+    finally:
+        with lock:
+            clients.remove((sock, addr))
+        sock.close()
+        print(f"[-] Cliente desconectado: {addr}")
+
+def command_panel():
+    while True:
+        cmd = input("C2> ")
+
+        if cmd == "/list":
+            print(list_clients())
+
+        elif cmd.startswith("/send"):
+            parts = cmd.split(" ", 2)
+            if len(parts) < 3:
+                print("Uso: /send <id> <comando>")
+                continue
             
-            else:
-                response = f"Servidor processou: {data.upper()}"
+            client_id = int(parts[1])
+            command = parts[2]
+            print(send_to_client(client_id, command))
 
-            client_socket.sendall(response.encode())
+        elif cmd.startswith("/all"):
+            command = cmd.replace("/all ", "", 1)
+            broadcast(command)
+            print("Comando enviado para todos.")
 
-        except Exception as e:
-            print(f"[!] Erro com {client_address}: {e}")
+        elif cmd == "/quit":
+            print("Encerrando servidor...")
             break
 
-    print(f"[-] Conexão encerrada: {client_address}")
-    # Remove da lista ao desconectar
-    for item in connected_clients:
-        if item[0] == client_socket:
-            connected_clients.remove(item)
-            break
-    client_socket.close()
-
-def start_server():
+def start():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind((HOST_IP, PORT))
+    server.bind((HOST, PORT))
     server.listen(5)
-    print(f"[*] Servidor C2 Online em {HOST_IP}:{PORT}")
+
+    print(f"[*] Servidor rodando em {HOST}:{PORT}")
+
+    threading.Thread(target=command_panel, daemon=True).start()
 
     while True:
-        client_sock, addr = server.accept()
-        connected_clients.append((client_sock, addr))
-        print(f"[+] Novo cliente controlado: {addr}")
-        
-        thread = threading.Thread(target=handle_client, args=(client_sock, addr))
-        thread.daemon = True
+        sock, addr = server.accept()
+
+        with lock:
+            clients.append((sock, addr))
+
+        thread = threading.Thread(target=handle_client, args=(sock, addr))
         thread.start()
 
 if __name__ == "__main__":
-    try:
-        start_server()
-    except KeyboardInterrupt:
-        print("\n[!] Desligando...")
-        sys.exit(0)
+    start()
