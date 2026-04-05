@@ -1,7 +1,7 @@
 import socket #importa modulo socket
 
 TCP_IP = '192.168.0.3' # endereço IP do servidor 
-TCP_PORTA = 24000      # porta disponibilizada pelo servidor
+TCP_PORTA = 10352      # porta disponibilizada pelo servidor
 TAMANHO_BUFFER = 1024
 
 MENSAGEM  = input("Digite sua mensagem para o servidor: ")
