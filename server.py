@@ -1,138 +1,103 @@
 import socket
 import threading
-
+import sys
 
 # Constants
-HOST_IP = '127.0.0.1'  # Localhost para testes
-PORT = 10352           # Remova as aspas, deixe como inteiro
-
-CLIENTS_IP = ['192.168.0.3']  # List of connected client IPs
+HOST_IP = '127.0.0.1'  
+PORT = 10352           
 
 # Lista para armazenar clientes conectados: [(client_socket, client_address), ...]
 connected_clients = []
 
-
 def banner():
-    """
-COMMAND & CONTROL SERVER
-
-Alunos: Derick e Ryan
-
-comandos disponiveis: 
-    - /help: exibe os comandos disponiveis
-    - /quit: sai do servidor
+    text = """
+    ===========================================
+    |       COMMAND & CONTROL SERVER          |
+    |          Alunos: Derick e Ryan          |
+    ===========================================
+    Comandos disponíveis: 
+    - /help: exibe os comandos disponíveis
     - /list: lista os clientes conectados
-    - /send <client_id> <message>: envia uma mensagem para um cliente específico
-    - /send <message>: envia uma mensagem para todos os clientes conectados
-"""
+    - /send <id> <msg>: mensagem para um cliente
+    - /send <msg>: mensagem para todos
+    - /quit: encerra o servidor
+    ===========================================
+    """
+    print(text)
+    return text
 
-    def start_server():
-        # Create a TCP/IP socket
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+def send_message_to_client(client_id, message):
+    try:
+        idx = int(client_id)
+        if 0 <= idx < len(connected_clients):
+            client_socket, _ = connected_clients[idx]
+            client_socket.sendall(f"[SERVER]: {message}".encode())
+            return True
+        return False
+    except (ValueError, IndexError):
+        return False
 
-        # Bind the socket to the address and port
-        server_socket.bind((HOST_IP, int(PORT)))
-
-        # Listen for incoming connections
-        server_socket.listen(1)
-        print(f"Server is listening on {HOST_IP}:{PORT}")
-
-        while True:
-            # Wait for a connection
-            client_socket, client_address = server_socket.accept()
-            print(f"Connection from {client_address} has been established.")
-
-            # Armazenar o cliente conectado
-            connected_clients.append((client_socket, client_address))
-
-            # Handle the client connection in a separate thread
-            client_thread = threading.Thread(
-                target=handle_client, args=(client_socket, client_address))
-            client_thread.start()
-
-    def process_command(command):
-        # Placeholder function to process commands received from clients
-        if command == "/help":
-            return "Available commands: /help, /quit, /list, /send <client_id> <message>, /send <message>"
-        elif command == "/quit":
-            return quit()
-        elif command == "/list":
-            if not connected_clients:
-                return "No clients connected."
-            else:
-                client_list = "\n".join(
-                    [f"{i}: {addr}" for i, (_, addr) in enumerate(connected_clients)])
-                return f"Connected clients:\n{client_list}"
-        elif command.startswith("/send "):
-            parts = command.split(" ", 2)
-            if len(parts) == 3:
-                client_id = parts[1]
-                message = parts[2]
-                if send_message_to_client(client_id, message):
-                    return f"Message sent to client {client_id}: {message}"
-                else:
-                    return f"Invalid client ID: {client_id}"
-            elif len(parts) == 2:
-                message = parts[1]
-                send_message_to_all_clients(message)
-                return f"Message sent to all clients: {message}"
-            else:
-                return "Invalid /send command. Use /send <client_id> <message> or /send <message>"
-        else:
-            return "Unknown command. Type /help for a list of available commands."
-
-    def handle_client(client_socket, client_address):
-        # Send a welcome message to the client
-
-        welcome_message = (
-            f"Welcome to the Command & Control Server! \n{banner()}"
-        )
-        client_socket.sendall(welcome_message.encode())
-
-        while True:
-            try:
-                # Receive data from the client
-                data = client_socket.recv(1024).decode()
-                if not data:
-                    break  # Client has disconnected
-
-                # Process the received command
-                response = process_command(data)
-                client_socket.sendall(response.encode())
-            except Exception as e:
-                print(f"Error handling client: {e}")
-                break
-
-        # Remover o cliente da lista quando desconectar
-        if (client_socket, client_address) in connected_clients:
-            connected_clients.remove((client_socket, client_address))
-
-        # Close the client socket
-        client_socket.close()
-
-    def send_message_to_client(client_id, message):
+def send_message_to_all_clients(message):
+    for client_socket, _ in connected_clients:
         try:
-            idx = int(client_id)
-            if 0 <= idx < len(connected_clients):
-                client_socket, _ = connected_clients[idx]
-                client_socket.sendall(message.encode())
-                return True
+            client_socket.sendall(f"[SERVER-ALL]: {message}".encode())
+        except:
+            pass
+    return True
+
+def handle_client(client_socket, client_address):
+    print(f"[NOVA CONEXÃO] {client_address} conectado.")
+    welcome = "Conectado ao C2 Server. Digite /help para comandos.\n"
+    client_socket.sendall(welcome.encode())
+
+    while True:
+        try:
+            data = client_socket.recv(1024).decode()
+            if not data:
+                break
+            
+            print(f"[{client_address}] enviou: {data}")
+            
+            # Lógica simples de resposta para o cliente
+            if data == "/help":
+                response = "Comandos: /help, /list, /quit"
+                client_socket.sendall(response.encode())
             else:
-                return False
-        except (ValueError, OSError):
-            return False
+                client_socket.sendall(f"Recebido: {data}".upper().encode())
 
-    def send_message_to_all_clients(message):
-        for client_socket, _ in connected_clients:
-            try:
-                client_socket.sendall(message.encode())
-            except OSError:
-                pass  # Ignore errors for disconnected clients
-        return True
+        except:
+            break
 
-    def quit():
-        """Close all client connections and shut down the server."""
-        for client_socket, _ in connected_clients:
-            client_socket.close()
-        print("Server is shutting down. Good Bye!")
-        exit(0)
+    print(f"[DESCONECTADO] {client_address}")
+    if (client_socket, client_address) in connected_clients:
+        connected_clients.remove((client_socket, client_address))
+    client_socket.close()
+
+def start_server():
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    
+    try:
+        server_socket.bind((HOST_IP, PORT))
+        server_socket.listen(5)
+        banner()
+        print(f"[*] Servidor escutando em {HOST_IP}:{PORT}")
+    except Exception as e:
+        print(f"[!] Erro ao iniciar servidor: {e}")
+        return
+
+    while True:
+        client_socket, client_address = server_socket.accept()
+        connected_clients.append((client_socket, client_address))
+        
+        thread = threading.Thread(target=handle_client, args=(client_socket, client_address))
+        thread.daemon = True
+        thread.start()
+
+# O "Pulo do Gato": Chamar a função principal para o script rodar!
+if __name__ == "__main__":
+    try:
+        start_server()
+    except KeyboardInterrupt:
+        print("\n[!] Encerrando servidor...")
+        sys.exit(0)
