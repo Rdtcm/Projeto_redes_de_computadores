@@ -3,13 +3,14 @@ import threading
 
 
 PORT = 10352
+IP_CLIENTE = "192.168.15.100"
 
 
 def chat_servidor_p2p():
     """Servidor para chat P2P - Cliente 1"""
     servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     servidor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    servidor.bind(('localhost', PORT))
+    servidor.bind(('0.0.0.0', PORT))
     servidor.listen(1)
 
     print("[SERVIDOR] Aguardando conexão...")
@@ -48,7 +49,7 @@ def chat_cliente_p2p():
     cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     try:
-        cliente.connect(('localhost', PORT))
+        cliente.connect((IP_CLIENTE, PORT))
         print("[CONECTADO] Conectado ao servidor")
 
         # Thread para receber mensagens
